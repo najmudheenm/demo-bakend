@@ -1,7 +1,7 @@
 {
-  "name": "secure-node-backend",
+  "name": "simple-node-backend",
   "version": "1.0.0",
-  "description": "Secure Node.js backend with CORS and SSL",
+  "description": "Simple Node.js backend for handling POST requests",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
