@@ -13,96 +13,23 @@ const sslOptions = {
   cert: fs.readFileSync(path.join(__dirname, '../ssl/certificate.crt'))
 };
 
-// Temporary permissive CORS for debugging
-const corsOptions = {
-  origin: function (origin, callback) {
-    console.log('Incoming origin:', origin);
-    // Allow all origins for now
-    callback(null, true);
-  },
-  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE', 'PATCH', 'HEAD'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-  maxAge: 86400 // 24 hours
-};
+
 
 // Enable CORS with the specified options
-app.use(cors(corsOptions));
+// Enable CORS for all routes and origins
+app.use(cors({
+    origin: '*', // Allow all origins
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  }));
 app.use(express.json());
 
-// Handle preflight requests
-app.options('*', cors(corsOptions));
 
 const data = [];
 
 // Enhanced CORS and request logging
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const requestHeaders = req.headers['access-control-request-headers'];
-  
-  console.log('\n=== New Request ===');
-  console.log('Method:', req.method);
-  console.log('Path:', req.path);
-  console.log('Origin:', origin || 'none');
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  
-  // Set CORS headers
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE, PATCH, HEAD');
-  res.setHeader('Access-Control-Allow-Headers', requestHeaders || 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Max-Age', '86400');
-  res.setHeader('Vary', 'Origin');
-  
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    console.log('Handling OPTIONS preflight');
-    return res.status(200).end();
-  }
-  
-  next();
-});
 
-// Enhanced error handler for CORS and general errors
-app.use((err, req, res, next) => {
-  console.error('\n=== Error ===');
-  console.error('Path:', req.path);
-  console.error('Method:', req.method);
-  console.error('Headers:', req.headers);
-  console.error('Error:', err);
-  console.error('Stack:', err.stack);
-  
-  if (err.message && err.message.includes('CORS')) {
-    console.error('CORS Error Details:', {
-      origin: req.headers.origin,
-      method: req.method,
-      url: req.url,
-      headers: req.headers
-    });
-    
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-    return res.status(200).json({
-      success: false,
-      error: 'CORS Error',
-      message: err.message,
-      details: {
-        method: req.method,
-        url: req.url,
-        headers: req.headers
-      }
-    });
-  }
-  
-  next(err);
-});
+
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -121,15 +48,6 @@ app.post('/', (req, res) => {
     
     data.push(last);
     
-    // Set response headers
-    const origin = req.headers.origin;
-    if (origin) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
     
     res.status(200).json({ 
       success: true,
