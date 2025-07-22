@@ -1,6 +1,26 @@
 version: '3.8'
 
 services:
+  # Firefox VNC Service
+  firefox:
+    image: jlesage/firefox
+    container_name: firefox-vnc
+    ports:
+      - "5800:5800"     # Web access
+      - "5900:5900"     # VNC port
+    environment:
+      - VNC_PASSWORD=password  # Change this to a secure password
+      - DISPLAY_WIDTH=1920
+      - DISPLAY_HEIGHT=1080
+    volumes:
+      - ./firefox-config:/config:rw
+    shm_size: 2gb
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
   # Node.js Backend Service with HTTPS
   backend:
     build: .
@@ -15,10 +35,18 @@ services:
       - ./ssl:/app/ssl:ro  # Mount SSL certificates as read-only
     restart: unless-stopped
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development  # Changed to development for better debugging
       - PORT=3001
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - app-network
+
+# Define the network
+networks:
+  app-network:
+    driver: bridge
+    name: app-network
