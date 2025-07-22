@@ -13,43 +13,16 @@ const sslOptions = {
   cert: fs.readFileSync(path.join(__dirname, '../ssl/certificate.crt'))
 };
 
-// Configure CORS for specific origin
-const allowedOrigins = [
-  'https://game.aviatrix.bet',
-  'http://localhost:3000',      // For local testing
-  'http://localhost:3443',      // For local HTTPS testing
-  'https://134.209.146.172:3001', // Direct IP access
-  'https://134.209.146.172'     // Without port for flexibility
-];
-
+// Temporary permissive CORS for debugging
 const corsOptions = {
   origin: function (origin, callback) {
     console.log('Incoming origin:', origin);
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      console.log('No origin header, allowing request');
-      return callback(null, true);
-    }
-    
-    // Check if the origin is in the allowed list or a subdomain
-    const isAllowed = allowedOrigins.some(allowedOrigin => {
-      return origin === allowedOrigin || 
-             origin.startsWith(allowedOrigin + '/') ||
-             (origin.endsWith('.aviatrix.bet') && allowedOrigin.includes('aviatrix.bet'));
-    });
-    
-    if (isAllowed) {
-      console.log('Origin allowed:', origin);
-      return callback(null, true);
-    } else {
-      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`;
-      console.error('CORS Error:', msg);
-      return callback(new Error(msg), false);
-    }
+    // Allow all origins for now
+    callback(null, true);
   },
-  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE', 'PATCH', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   credentials: true,
   preflightContinue: false,
   optionsSuccessStatus: 204,
@@ -65,37 +38,69 @@ app.options('*', cors(corsOptions));
 
 const data = [];
 
-// Add CORS headers to all responses
+// Enhanced CORS and request logging
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (allowedOrigins.some(o => origin && (origin === o || origin.startsWith(o + '/') || o.includes(origin.replace(/^https?:\/\//, ''))))) {
+  const requestHeaders = req.headers['access-control-request-headers'];
+  
+  console.log('\n=== New Request ===');
+  console.log('Method:', req.method);
+  console.log('Path:', req.path);
+  console.log('Origin:', origin || 'none');
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  
+  // Set CORS headers
+  if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE, PATCH, HEAD');
+  res.setHeader('Access-Control-Allow-Headers', requestHeaders || 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Max-Age', '86400');
+  res.setHeader('Vary', 'Origin');
   
   // Handle preflight
   if (req.method === 'OPTIONS') {
+    console.log('Handling OPTIONS preflight');
     return res.status(200).end();
   }
   
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${origin || 'none'}`);
   next();
 });
 
-// Error handler for CORS
+// Enhanced error handler for CORS and general errors
 app.use((err, req, res, next) => {
-  if (err.message.includes('CORS')) {
-    console.error('CORS Error:', err.message);
-    return res.status(403).json({
+  console.error('\n=== Error ===');
+  console.error('Path:', req.path);
+  console.error('Method:', req.method);
+  console.error('Headers:', req.headers);
+  console.error('Error:', err);
+  console.error('Stack:', err.stack);
+  
+  if (err.message && err.message.includes('CORS')) {
+    console.error('CORS Error Details:', {
+      origin: req.headers.origin,
+      method: req.method,
+      url: req.url,
+      headers: req.headers
+    });
+    
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    return res.status(200).json({
       success: false,
-      error: 'Not allowed by CORS',
+      error: 'CORS Error',
       message: err.message,
-      allowedOrigins: allowedOrigins
+      details: {
+        method: req.method,
+        url: req.url,
+        headers: req.headers
+      }
     });
   }
+  
   next(err);
 });
 
@@ -107,19 +112,48 @@ app.get('/health', (req, res) => {
 // Handle POST request from the client
 app.post('/', (req, res) => {
   try {
+    console.log('POST / - Request body:', req.body);
+    
     const { last } = req.body;
+    if (last === undefined) {
+      throw new Error('Missing required field: last');
+    }
+    
     data.push(last);
+    
+    // Set response headers
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
     res.status(200).json({ 
       success: true,
       received: last,
       message: 'Data received successfully',
-      protocol: 'https'
+      protocol: 'https',
+      timestamp: new Date().toISOString(),
+      dataCount: data.length
     });
+    
+    console.log('POST / - Response sent successfully');
   } catch (error) {
-    console.error('Error processing request:', error);
-    res.status(500).json({
+    console.error('Error in POST /:', {
+      error: error.message,
+      stack: error.stack,
+      body: req.body,
+      headers: req.headers
+    });
+    
+    const statusCode = error.message.includes('Missing') ? 400 : 500;
+    res.status(statusCode).json({
       success: false,
-      error: 'Internal server error'
+      error: error.message || 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
