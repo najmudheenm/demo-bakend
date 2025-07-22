@@ -6,8 +6,10 @@ services:
     build: .
     container_name: node-backend
     ports:
-      - "3001:3001"  # HTTP port (for health checks)
+      - "3001:3001"  # HTTP port
       - "3443:3001"  # HTTPS port
+      - "80:3001"    # Fallback HTTP port
+      - "443:3001"   # Fallback HTTPS port
     volumes:
       - ./src:/app/src
       - ./ssl:/app/ssl:ro  # Mount SSL certificates as read-only
@@ -19,7 +21,14 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   app-network:
     driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: app-network

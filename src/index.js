@@ -16,26 +16,44 @@ const sslOptions = {
 // Configure CORS for specific origin
 const allowedOrigins = [
   'https://game.aviatrix.bet',
-  'http://localhost:3000',  // For local testing
-  'http://localhost:3443'   // For local HTTPS testing
+  'http://localhost:3000',      // For local testing
+  'http://localhost:3443',      // For local HTTPS testing
+  'https://134.209.146.172:3001', // Direct IP access
+  'https://134.209.146.172'     // Without port for flexibility
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    console.log('Incoming origin:', origin);
     
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      console.log('No origin header, allowing request');
+      return callback(null, true);
+    }
+    
+    // Check if the origin is in the allowed list or a subdomain
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      return origin === allowedOrigin || 
+             origin.startsWith(allowedOrigin + '/') ||
+             (origin.endsWith('.aviatrix.bet') && allowedOrigin.includes('aviatrix.bet'));
+    });
+    
+    if (isAllowed) {
+      console.log('Origin allowed:', origin);
+      return callback(null, true);
+    } else {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`;
+      console.error('CORS Error:', msg);
       return callback(new Error(msg), false);
     }
-    return callback(null, true);
   },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
   preflightContinue: false,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // 24 hours
 };
 
 // Enable CORS with the specified options
@@ -47,9 +65,23 @@ app.options('*', cors(corsOptions));
 
 const data = [];
 
-// Add request logging
+// Add CORS headers to all responses
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`);
+  const origin = req.headers.origin;
+  if (allowedOrigins.some(o => origin && (origin === o || origin.startsWith(o + '/') || o.includes(origin.replace(/^https?:\/\//, ''))))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${origin || 'none'}`);
   next();
 });
 
