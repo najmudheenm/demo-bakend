@@ -18,10 +18,8 @@ const sslOptions = {
 // Enable CORS with the specified options
 // Enable CORS for all routes and origins
 app.use(cors({
-    origin: '*', // Allow all origins
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }));
+    origin: "*"
+}));
 app.use(express.json());
 
 

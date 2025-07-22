@@ -11,7 +11,7 @@ RUN apk --no-cache add curl
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install --production
+RUN npm install 
 
 # Create SSL directory
 RUN mkdir -p /app/ssl
